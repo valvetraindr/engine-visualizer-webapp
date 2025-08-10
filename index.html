@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Four-Stroke Engine Visualizer (Web)</title>
+  <style>
+    :root{color-scheme:dark}
+    body{margin:0;background:#0f172a;color:#e5e7eb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
+    .layout{display:grid;grid-template-columns:420px 1fr;min-height:100vh}
+    .left{padding:16px;border-right:1px solid #1f2937;overflow:auto}
+    h1{font-size:18px;margin:0 0 6px 0} h2{font-size:14px;margin:14px 0 8px}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0}
+    .row label{font-size:12px;color:#cbd5e1;flex:0 0 220px}
+    .row input[type=number]{width:110px;background:#0b1220;border:1px solid #334155;color:#e5e7eb;border-radius:6px;padding:6px}
+    .row input[type=range]{width:100%}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:12px;margin:10px 0}
+    .badge{display:inline-block;background:#1f2937;border:1px solid #334155;border-radius:6px;padding:2px 6px;margin-left:6px;font-size:11px;color:#9ca3af}
+    .small{font-size:12px;color:#9ca3af}
+    #three{position:relative}
+    #plot{width:100%;height:200px;background:#0b1220;border:1px solid #334155;border-radius:8px}
+    textarea{width:100%;height:80px;background:#0b1220;border:1px solid #334155;border-radius:8px;color:#e5e7eb;font-size:11px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .toggle{display:flex;align-items:center;gap:6px}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="left">
+      <h1>Four-Stroke Engine Visualizer <span class="badge">Web • No Install</span></h1>
+      <div class="small">Change values live; the 3D and plots update in real time.</div>
+
+      <div class="card">
+        <h2>Derive Valve Events</h2>
+        <div class="row toggle">
+          <input id="useDerived" type="checkbox" checked>
+          <label for="useDerived">Use LSA/ICL + seat durations</label>
+        </div>
+        <div class="grid2">
+          <div>
+            <div class="row"><label>LSA (°)</label><input id="LSA" type="number" step="0.5" value="112"></div>
+            <div class="row"><label>ICL (° ATDC)</label><input id="ICL" type="number" step="0.5" value="108"></div>
+          </div>
+          <div>
+            <div class="row"><label>Seat Dur I (°)</label><input id="seatInt" type="number" step="1" value="300"></div>
+            <div class="row"><label>Seat Dur E (°)</label><input id="seatExh" type="number" step="1" value="312"></div>
+          </div>
+        </div>
+        <div class="small">IVO = D/2 − ICL, IVC = D/2 + ICL − 180, EVO = D/2 + ECL − 180, EVC = D/2 − ECL; ECL = 2×LSA − ICL.</div>
+      </div>
+
+      <div class="card" id="manualEvents">
+        <h2>Manual Valve Events (0-lift edges)</h2>
+        <div class="row"><label>IVO (° BTDC)</label><input id="IVO" type="number" step="1" value="30"></div>
+        <div class="row"><label>IVC (° ABDC)</label><input id="IVC" type="number" step="1" value="70"></div>
+        <div class="row"><label>EVO (° BBDC)</label><input id="EVO" type="number" step="1" value="80"></div>
+        <div class="row"><label>EVC (° ATDC)</label><input id="EVC" type="number" step="1" value="20"></div>
+      </div>
+
+      <div class="card">
+        <h2>Cam, Rocker & Lash</h2>
+        <div class="grid2">
+          <div>
+            <div class="row"><label>Lobe Lift Intake (in)</label><input id="lobeLiftInt" type="number" step="0.001" value="0.420"></div>
+            <div class="row"><label>Rocker Ratio Intake</label><input id="rockerInt" type="number" step="0.01" value="1.70"></div>
+            <div class="row"><label>Lash Intake (in)</label><input id="lashInt" type="number" step="0.001" value="0.000"></div>
+          </div>
+          <div>
+            <div class="row"><label>Lobe Lift Exhaust (in)</label><input id="lobeLiftExh" type="number" step="0.001" value="0.420"></div>
+            <div class="row"><label>Rocker Ratio Exhaust</label><input id="rockerExh" type="number" step="0.01" value="1.70"></div>
+            <div class="row"><label>Lash Exhaust (in)</label><input id="lashExh" type="number" step="0.001" value="0.000"></div>
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <div class="row"><label>Dur @ .050 I (°)</label><input id="dur050i" type="number" step="1" value="270"></div>
+            <div class="row"><label>Dur @ .200 I (°, opt)</label><input id="dur200i" type="number" step="1" value="0"></div>
+            <div class="row"><label>Dur @ .400 I (°, opt)</label><input id="dur400i" type="number" step="1" value="0"></div>
+          </div>
+          <div>
+            <div class="row"><label>Dur @ .050 E (°)</label><input id="dur050e" type="number" step="1" value="282"></div>
+            <div class="row"><label>Dur @ .200 E (°, opt)</label><input id="dur200e" type="number" step="1" value="0"></div>
+            <div class="row"><label>Dur @ .400 E (°, opt)</label><input id="dur400e" type="number" step="1" value="0"></div>
+          </div>
+        </div>
+        <div class="small" id="valveMaxText"></div>
+      </div>
+
+      <div class="card">
+        <h2>Bottom-End Geometry & Quench</h2>
+        <div class="grid2">
+          <div>
+            <div class="row"><label>Deck Height (in)</label><input id="deckHeight" type="number" step="0.001" value="9.020"></div>
+            <div class="row"><label>Rod Length (in)</label><input id="rodLen" type="number" step="0.001" value="6.200"></div>
+            <div class="row"><label>Stroke (in)</label><input id="stroke" type="number" step="0.001" value="4.000"></div>
+          </div>
+          <div>
+            <div class="row"><label>Piston Comp Height (in)</label><input id="compHeight" type="number" step="0.001" value="1.125"></div>
+            <div class="row"><label>Gasket Thickness (in)</label><input id="gasketThk" type="number" step="0.001" value="0.040"></div>
+            <div class="row"><label>Bore (in)</label><input id="bore" type="number" step="0.001" value="4.125"></div>
+          </div>
+        </div>
+        <div class="small" id="quenchText"></div>
+      </div>
+
+      <div class="card">
+        <h2>Pressure Wave Tuning (optional)</h2>
+        <div class="row toggle">
+          <input id="enablePressure" type="checkbox">
+          <label for="enablePressure">Enable pressure wave overlay</label>
+        </div>
+        <div class="grid2">
+          <div>
+            <div class="row"><label>Intake Length (in)</label><input id="intakeLenIn" type="number" step="0.1" value="12.0"></div>
+            <div class="row"><label>Air Temp (°F)</label><input id="airTempF" type="number" step="1" value="90"></div>
+          </div>
+          <div>
+            <div class="row"><label>Exhaust Length (in)</label><input id="exhaustLenIn" type="number" step="0.1" value="28.0"></div>
+            <div class="row"><label>Gas Temp (°F)</label><input id="gasTempF" type="number" step="10" value="1100"></div>
+          </div>
+        </div>
+        <div class="row"><label>Harmonics listed</label><input id="harmonics" type="number" step="1" value="5"></div>
+        <div class="row"><label>Target RPM (for suggestions)</label><input id="targetRPM" type="number" step="50" value="6500"></div>
+        <div class="row toggle"><input id="csvHeader" type="checkbox" checked><label for="csvHeader">Include header in CSV</label></div>
+        <div class="small" id="tuningReadout"></div>
+        <div id="csvBlock" class="small" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <h2>Playback</h2>
+        <div class="row"><label>RPM</label><input id="rpm" type="number" step="10" value="600"></div>
+        <div class="row"><label>Dwell band threshold (in)</label><input id="dwell" type="number" step="0.001" value="0.020"></div>
+      </div>
+
+      <div class="card">
+        <h2>Live Lift vs. Crank</h2>
+        <canvas id="plot" width="640" height="200"></canvas>
+        <div class="small">Blue = Intake, Red = Exhaust. Cyan/orange areas show TDC/BDC dwell bands.</div>
+      </div>
+
+      <div class="small">Tip: Use ⌘/+ and ⌘/− in your browser to scale the UI.</div>
+    </div>
+
+    <div id="three"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+    const $ = (id)=>document.getElementById(id);
+    const deg2rad = (d)=> d*Math.PI/180;
+    const wrap720 = (a)=> ((a%720)+720)%720;
+
+    function pistonDispFromTDC(stroke, rodLen, thetaDeg) {
+      const r = stroke/2, th = deg2rad(thetaDeg%360);
+      return r*(1-Math.cos(th)) + (rodLen - Math.sqrt(rodLen**2 - (r*Math.sin(th))**2));
+    }
+    function deriveSeatEvents(LSA, ICL, seatInt, seatExh) {
+      const halfI = seatInt/2, halfE = seatExh/2;
+      const ECL = 2*LSA - ICL;
+      return { IVO: Math.max(0, halfI - ICL), IVC: Math.max(0, halfI + ICL - 180),
+               EVO: Math.max(0, halfE + ECL - 180), EVC: Math.max(0, halfE - ECL), ECL };
+    }
+    function widthFracAtThreshold(p, h) {
+      if (h<=0) return 1; if (h>=1) return 0;
+      const u0 = Math.asin(Math.pow(h, 1/p))/Math.PI;
+      return Math.max(0, 1-2*u0);
+    }
+    function solveShapeP(Wdeg, Lmax, d050, d200, d400) {
+      const pairs=[];
+      if (d050>0 && Lmax>0) pairs.push({h: Math.min(0.050/Lmax,0.9999), D:d050});
+      if (d200>0 && Lmax>0) pairs.push({h: Math.min(0.200/Lmax,0.9999), D:d200});
+      if (d400>0 && Lmax>0) pairs.push({h: Math.min(0.400/Lmax,0.9999), D:d400});
+      if (pairs.length===0 || Wdeg<=0) return 1;
+      let bestP=1, bestErr=1e18;
+      for (let p=0.6;p<=6.0;p+=0.02){
+        let err=0;
+        for (const {h,D} of pairs){
+          const Dpred = widthFracAtThreshold(p,h)*Wdeg;
+          err += (Dpred-D)**2;
+        }
+        if (err<bestErr){bestErr=err;bestP=p;}
+      }
+      return bestP;
+    }
+    function speedOfSoundFtPerS(tempF){ return 49*Math.sqrt(tempF+459.67); }
+
+    const state = {};
+    document.querySelectorAll('input').forEach(inp=>{
+      state[inp.id] = (inp.type==='checkbox') ? inp.checked : parseFloat(inp.value);
+      inp.addEventListener('input', ()=>{
+        state[inp.id] = (inp.type==='checkbox') ? inp.checked : parseFloat(inp.value);
+        if (inp.id==='useDerived') document.getElementById('manualEvents').style.display = state.useDerived ? 'none' : 'block';
+        drawPlot();
+      });
+    });
+    document.getElementById('manualEvents').style.display = state.useDerived ? 'none' : 'block';
+
+    // 3D
+    const mount = document.getElementById('three');
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    mount.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#0f172a');
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
+    camera.position.set(0, 3.5, 9);
+    scene.add(new THREE.DirectionalLight(0xffffff, 1.0)).position.set(5,10,8);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const group = new THREE.Group(); scene.add(group);
+    const cylGeom = new THREE.CylinderGeometry(1.8,1.8,6,64,1,true);
+    const cylMat = new THREE.MeshStandardMaterial({color:0x334155, metalness:0.2, roughness:0.7, side:THREE.DoubleSide, transparent:true, opacity:0.35});
+    const cylinder = new THREE.Mesh(cylGeom, cylMat); cylinder.rotation.z = Math.PI/2; group.add(cylinder);
+    const pistonGeom = new THREE.CylinderGeometry(1.8,1.8,0.4,64);
+    const pistonMat = new THREE.MeshStandardMaterial({color:0x93c5fd, metalness:0.7, roughness:0.2});
+    const piston = new THREE.Mesh(pistonGeom, pistonMat); piston.rotation.z = Math.PI/2; group.add(piston);
+    const valveGeom = new THREE.CylinderGeometry(0.15,0.15,2.4,24);
+    const vIntMat = new THREE.MeshStandardMaterial({color:0x3b82f6, metalness:0.4, roughness:0.4});
+    const vExhMat = new THREE.MeshStandardMaterial({color:0xf87171, metalness:0.4, roughness:0.4});
+    const vInt = new THREE.Mesh(valveGeom, vIntMat); vInt.position.set(-1.0,0,0); group.add(vInt);
+    const vExh = new THREE.Mesh(valveGeom, vExhMat); vExh.position.set( 1.0,0,0); group.add(vExh);
+    const deckPlane = new THREE.Mesh(new THREE.PlaneGeometry(6,4), new THREE.MeshBasicMaterial({color:0x64748b, transparent:true, opacity:0.15}));
+    deckPlane.rotation.x = -Math.PI/2; deckPlane.position.y = 1.2; group.add(deckPlane);
+    const resize = ()=>{
+      const w = mount.clientWidth || window.innerWidth - 420; const h = window.innerHeight;
+      renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', resize); resize();
+
+    // Valve math
+    function events() {
+      if (state.useDerived) return deriveSeatEvents(state.LSA, state.ICL, state.seatInt, state.seatExh);
+      return { IVO: state.IVO, IVC: state.IVC, EVO: state.EVO, EVC: state.EVC, ECL: 2*state.LSA - state.ICL };
+    }
+    function windows(ev){
+      const intOpen = wrap720(720 - ev.IVO);
+      let intClose = wrap720(180 + ev.IVC); if (intClose <= intOpen) intClose += 720;
+      const exhOpen = wrap720(540 - ev.EVO);
+      let exhClose = wrap720(720 + ev.EVC); if (exhClose <= exhOpen) exhClose += 720;
+      return {intOpen,intClose,exhOpen,exhClose};
+    }
+    function liftAt(a, open, close, Lmax, p){
+      let o=open,c=close; if(c<=o)c+=720; let aa=a; if(aa<o)aa+=720;
+      if (aa>=o && aa<=c && Lmax>0 && (c-o)>0){
+        const u=(aa-o)/(c-o); const frac=Math.pow(Math.sin(Math.PI*u), p); return Lmax*frac;
+      }
+      return 0;
+    }
+
+    // Plot + dwell
+    const plot = document.getElementById('plot');
+    const ctx = plot.getContext('2d');
+    function computeDwellBands(stroke, rodLen, thresh) {
+      const res=0.5, T=[], B=[]; let inT=false,t0=0,inB=false,b0=0;
+      for(let a=0;a<=720;a+=res){
+        const disp = pistonDispFromTDC(stroke, rodLen, a%360);
+        const nearT = disp <= (thresh+1e-6);
+        const nearB = (stroke - disp) <= (thresh+1e-6);
+        if (nearT && !inT){inT=true; t0=a}
+        if (!nearT && inT){inT=false; T.push([t0,a])}
+        if (nearB && !inB){inB=true; b0=a}
+        if (!nearB && inB){inB=false; B.push([b0,a])}
+      }
+      if (inT) T.push([t0,720]); if (inB) B.push([b0,720]);
+      const merge = (arr)=>{ if(arr.length<=1) return arr; const out=[]; let [s,e]=arr[0];
+        for(let i=1;i<arr.length;i++){const[s2,e2]=arr[i]; if(s2-e<0.75){e=e2}else{out.push([s,e]); [s,e]=[s2,e2]} }
+        out.push([s,e]); return out;
+      };
+      return {T:merge(T), B:merge(B)};
+    }
+
+    function drawPlot(){
+      const ev = events(); const w = windows(ev);
+      const LmaxI = Math.max(0, state.lobeLiftInt*state.rockerInt - state.lashInt);
+      const LmaxE = Math.max(0, state.lobeLiftExh*state.rockerExh - state.lashExh);
+      const Wint = w.intClose - w.intOpen, Wexh = w.exhClose - w.exhOpen;
+      const pI = solveShapeP(Wint, LmaxI, state.dur050i, state.dur200i, state.dur400i);
+      const pE = solveShapeP(Wexh, LmaxE, state.dur050e, state.dur200e, state.dur400e);
+
+      const W=plot.width,H=plot.height;
+      ctx.clearRect(0,0,W,H);
+      const left=30,right=W-10,top=10,bottom=H-20, ww=right-left, hh=bottom-top;
+      ctx.strokeStyle='#9aa1a8'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(30,H-20); ctx.lineTo(W-10,H-20); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(30,10); ctx.lineTo(30,H-20); ctx.stroke();
+      ctx.fillStyle='#cbd5e1'; ctx.font='10px system-ui'; ctx.fillText('0°', 28, H-6); ctx.fillText('720°', W-42, H-6);
+
+      const dwell = computeDwellBands(state.stroke, state.rodLen, state.dwell);
+      ctx.save(); ctx.globalAlpha=0.18; ctx.fillStyle='#06b6d4';
+      dwell.T.forEach(([s,e])=>{ const x0=left+(s/720)*ww, x1=left+(e/720)*ww; ctx.fillRect(x0,top,x1-x0,hh); });
+      ctx.fillStyle='#fb923c';
+      dwell.B.forEach(([s,e])=>{ const x0=left+(s/720)*ww, x1=left+(e/720)*ww; ctx.fillRect(x0,top,x1-x0,hh); });
+      ctx.restore();
+
+      const maxLift = Math.max(LmaxI, LmaxE, 0.001);
+      ctx.strokeStyle='#60a5fa'; ctx.lineWidth=2; ctx.beginPath();
+      for(let i=0;i<=720;i++){
+        const Li = liftAt(i,w.intOpen,w.intClose,LmaxI,pI);
+        const x = left + (i/720)*ww;
+        const y = bottom - (Li/(maxLift||1))*hh;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      } ctx.stroke();
+      ctx.strokeStyle='#f87171'; ctx.lineWidth=2; ctx.beginPath();
+      for(let i=0;i<=720;i++){
+        const Le = liftAt(i,w.exhOpen,w.exhClose,LmaxE,pE);
+        const x = left + (i/720)*ww;
+        const y = bottom - (Le/(maxLift||1))*hh;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      } ctx.stroke();
+
+      $('valveMaxText').textContent = `Valve Max I≈ ${(LmaxI).toFixed(3)} in  •  E≈ ${(LmaxE).toFixed(3)} in`;
+      const deckClear = state.deckHeight - state.rodLen - state.stroke/2 - state.compHeight;
+      const quench = deckClear + state.gasketThk;
+      const hint = quench<0?'INTERFERENCE':(quench<0.030?'tight':(quench<=0.055?'ok':'loose'));
+      $('quenchText').textContent = `Deck clearance @TDC: ${deckClear.toFixed(3)} in ${deckClear<0?'(piston protrusion)':''} • Quench: ${quench.toFixed(3)} in [${hint}]`;
+
+      if (state.enablePressure) {
+        const cInt = speedOfSoundFtPerS(state.airTempF);
+        const cExh = speedOfSoundFtPerS(state.gasTempF);
+        const LintFt = Math.max(state.intakeLenIn/12,0.1), LexhFt = Math.max(state.exhaustLenIn/12,0.1);
+        let html = '<div><b>Tuned RPMs</b><br/><table style="border-collapse:collapse;border:1px solid #334155"><tr><th style="padding:4px">k</th><th style="padding:4px">odd</th><th style="padding:4px">Intake</th><th style="padding:4px">Exhaust</th></tr>';
+        const rows=[["k","odd","Intake tuned RPM","Exhaust tuned RPM","Near(Int)","Near(Exh)","Suggest Len Int (in) @Target","Suggest Len Exh (in) @Target"]];
+        for (let k=1;k<=state.harmonics;k++){
+          const odd=2*k-1;
+          const rpmInt = 30*odd*cInt/LintFt;
+          const rpmExh = 30*odd*cExh/LexhFt;
+          html += `<tr><td style="padding:4px">${k}</td><td style="padding:4px">${odd}</td><td style="padding:4px">${Math.round(rpmInt)}</td><td style="padding:4px">${Math.round(rpmExh)}</td></tr>`;
+          const Lint_s = (30*odd*cInt/Math.max(state.targetRPM,500))*12;
+          const Lexh_s = (30*odd*cExh/Math.max(state.targetRPM,500))*12;
+          const nearI = Math.abs((state.rpm - rpmInt)/rpmInt)<=0.1 ? 'YES' : '';
+          const nearE = Math.abs((state.rpm - rpmExh)/rpmExh)<=0.1 ? 'YES' : '';
+          rows.push([k,odd,Math.round(rpmInt),Math.round(rpmExh),nearI,nearE, Lint_s.toFixed(1), Lexh_s.toFixed(1)]);
+        }
+        html+='</table></div>';
+        $('tuningReadout').innerHTML = html;
+        let csv = '';
+        if (state.csvHeader){
+          csv += ['RPM','LSA_deg','ICL_deg_ATDC','SeatDurI','SeatDurE'].join(',')+'\\n';
+          csv += [state.rpm,state.LSA,state.ICL,state.seatInt,state.seatExh].join(',')+'\\n\\n';
+          csv += 'k,odd,Intake tuned RPM,Exhaust tuned RPM,Near(Int),Near(Exh),Suggest Len Int (in) @Target,Suggest Len Exh (in) @Target\\n';
+        }
+        csv += rows.slice(1).map(r=>r.join(',')).join('\\n');
+        const href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+        $('csvBlock').innerHTML = `<a href="${href}" download="tuning_${Date.now()}.csv">Download CSV</a><br/><textarea readonly>${csv}</textarea>`;
+      } else {
+        $('tuningReadout').innerHTML = '<span class="small">Disabled</span>';
+        $('csvBlock').innerHTML = '';
+      }
+    }
+
+    let crank = 0;
+    function animate(){
+      const ev = events(); const w = windows(ev);
+      const LmaxI = Math.max(0, state.lobeLiftInt*state.rockerInt - state.lashInt);
+      const LmaxE = Math.max(0, state.lobeLiftExh*state.rockerExh - state.lashExh);
+      const Wint = w.intClose - w.intOpen, Wexh = w.exhClose - w.exhOpen;
+      const pI = solveShapeP(Wint, LmaxI, state.dur050i, state.dur200i, state.dur400i);
+      const pE = solveShapeP(Wexh, LmaxE, state.dur050e, state.dur200e, state.dur400e);
+
+      const disp = pistonDispFromTDC(state.stroke, state.rodLen, crank%360);
+      piston.position.y = - (disp - state.stroke/2) * 1.6;
+      const Li = (a)=> liftAt(a,w.intOpen,w.intClose,LmaxI,pI);
+      const Le = (a)=> liftAt(a,w.exhOpen,w.exhClose,LmaxE,pE);
+      vInt.position.y = 1.2 - Li(crank)*4;
+      vExh.position.y = 1.2 - Le(crank)*4;
+
+      renderer.render(scene, camera);
+      const cps = state.rpm/60*360/60; // ~deg/frame @60fps
+      crank = (crank + cps) % 720;
+      requestAnimationFrame(animate);
+    }
+    animate(); drawPlot();
+
+    function drawOnce(){ drawPlot(); }
+    window.addEventListener('input', drawOnce);
+  </script>
+</body>
+</html>
